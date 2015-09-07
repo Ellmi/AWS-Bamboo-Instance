@@ -1,0 +1,20 @@
+GEM
+  remote: https://ruby.taobao.org/
+  specs:
+    aws-sdk (2.1.19)
+      aws-sdk-resources (= 2.1.19)
+    aws-sdk-core (2.1.19)
+      jmespath (~> 1.0)
+    aws-sdk-resources (2.1.19)
+      aws-sdk-core (= 2.1.19)
+    jmespath (1.0.2)
+      multi_json (~> 1.0)
+    multi_json (1.11.2)
+    rake (10.4.2)
+
+PLATFORMS
+  ruby
+
+DEPENDENCIES
+  aws-sdk
+  rake
