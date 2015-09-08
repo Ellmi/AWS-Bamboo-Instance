@@ -1,0 +1,281 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+
+  "Description": "AWS Bamboo master",
+
+  "Parameters": {
+
+    "SSHKeyName": {
+      "Description" : "The SSH keyname that you might use to access the master instance, if you need to",
+      "Type" : "String",
+      "Default" : "delivery"
+    },
+
+    "IAMRole": {
+      "Description": "the EXISTING iam role for instance profiles to run with",
+      "Type": "String",
+      "Default": "bamboo-agent-delivery"
+    },
+
+    "ZoneName": {
+      "Description": "The zone to create the human name in",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "128",
+      "Default": "delivery.bamboo.yanminx.com"
+    },
+
+    "HostName": {
+      "Description": "The human-readable endpoint hostname, e.g. 'master.aws-bamboo'",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "128"
+    },
+
+    "AZ": {
+      "Description": "The Availability Zone in which to create the master instance. Either us-west-2a or us-west-2b.",
+      "Type": "String",
+      "AllowedValues": [ "us-west-2a", "us-west-2b" ]
+    },
+
+    "MyVpcId" : {
+      "Description" : "The VPC ID that you're deploying into",
+      "Type" : "String",
+      "MinLength" : "12",
+      "MaxLength" : "12",
+      "AllowedPattern" : "vpc-[a-f0-9]{8}",
+      "ConstraintDescription" : "Must be a valid VPC ID",
+      "Default": "vpc-id"
+    },
+
+    "AMI": {
+      "Description" : "The desired AMI to use",
+      "Type" : "String",
+      "MinLength" : "12",
+      "MaxLength" : "12",
+      "AllowedPattern" : "ami-[a-f0-9]{8}",
+      "ConstraintDescription" : "Must be a valid AMI in the destination AWS account"
+    },
+
+    "Password": {
+      "Description": "The password for Bamboo's RDS database.",
+      "Type": "String",
+      "NoEcho": "true"
+    }
+
+  },
+
+  "Mappings" : {
+
+    "SubnetMap": {
+      "us-west-2a": { "subnet": "subnet-one"},
+      "us-west-2b": { "subnet": "subnet-two"}
+    },
+
+    "VpcId2Subnets" : {
+      "vpc-id": {
+        "private": ["subnet-one", "subnet-two"]
+      }
+    }
+
+  },
+
+  "Resources": {
+
+    "CfnUser": {
+      "Type": "AWS::IAM::User",
+      "Metadata": {
+        "Comment": [
+          "This user account exists so that credentials",
+          "can be created for it, and passed in for cfn-init",
+          "to use when communicating back out to the CloudFormation API.",
+          "",
+          "When creating or updating a stack that makes use of IAM types,",
+          "you MUST specify CAPABILITY_IAM otherwise the creation/update will",
+          "fail"
+        ]
+      },
+      "Properties": {
+        "Path": "/application/",
+        "Policies": [
+          {
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect":"Allow",
+                  "Action":"cloudformation:DescribeStackResource",
+                  "Resource":"*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+
+    "HostKeys": {
+      "Type": "AWS::IAM::AccessKey",
+      "Properties": {
+        "UserName": { "Ref": "CfnUser" }
+      }
+    },
+
+    "MasterSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription" : "Enable inbound SSH, and ports 8085 and 54663 (for Bamboo HTTP/JMS)",
+        "VpcId" : { "Ref" : "MyVpcId" },
+        "SecurityGroupIngress": [
+          { "IpProtocol" : "tcp", "FromPort" :    "22", "ToPort" :    "22", "CidrIp" : "0.0.0.0/0" },
+          { "IpProtocol" : "tcp", "FromPort" :  "8085", "ToPort" :  "8085", "CidrIp" : "0.0.0.0/0" },
+          { "IpProtocol" : "tcp", "FromPort" : "54663", "ToPort" : "54663", "CidrIp" : "0.0.0.0/0" }
+        ]
+      }
+    },
+
+    "MasterInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "SubnetId": { "Fn::FindInMap" : [ "SubnetMap", { "Ref" : "AZ" }, "subnet" ]},
+        "SecurityGroupIds": [ { "Ref": "MasterSecurityGroup" } ],
+        "DisableApiTermination": "false",
+        "ImageId": { "Ref" : "AMI" },
+        "IamInstanceProfile": {"Ref": "IAMRole"},
+        "InstanceType": "m1.xlarge",
+        "BlockDeviceMappings":  [
+          {
+            "DeviceName" : "/dev/sda",
+            "Ebs" : { "VolumeSize" : "250" }
+          }
+        ],
+        "KeyName": { "Ref" : "SSHKeyName" },
+        "Monitoring": "false",
+        "Tags": [
+          {
+            "Key": "node_name",
+            "Value":  { "Ref" : "HostName" }
+          },
+          {
+            "Key": "Name",
+            "Value": { "Fn::Join": [".", [{ "Ref": "HostName" }, { "Ref": "ZoneName" } ]]}
+          }
+        ],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "# run cfn-init to actually have the metadata applied\n",
+                "# NOTE this will not apply changes if the metadata is updated\n",
+                "# That will only happen if you configure and enable cfn-hup\n",
+                "/opt/aws/bin/cfn-init -s ", { "Ref": "AWS::StackName" },
+                " -r MasterInstance ",
+                " --access-key ", { "Ref": "HostKeys" },
+                " --secret-key ", { "Fn::GetAtt": [ "HostKeys", "SecretAccessKey" ] },
+                " --region ", { "Ref": "AWS::Region" },
+                " || error_exit 'Failed to run cfn-init'\n"
+              ]
+            ]
+          }
+        }
+      },
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "config": {
+            "packages": { "yum": {"rea-bamboo": [] } },
+            "services": {
+              "sysvinit": {
+                "bamboo": {
+                  "enabled": true,
+                  "ensureRunning": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+
+
+    "CnameOfNiceness": {
+      "Type": "AWS::Route53::RecordSet",
+      "Properties": {
+        "Comment": "Public CNAME",
+        "HostedZoneName": { "Ref" : "ZoneName" },
+        "Name": {
+          "Fn::Join" : [
+            "", [ { "Ref" : "HostName" }, ".", { "Ref" : "ZoneName" }]
+          ]
+        },
+        "Type": "CNAME",
+        "TTL": "300",
+        "ResourceRecords": [
+          { "Fn::GetAtt": [ "MasterInstance", "PrivateDnsName" ] }
+        ]
+      }
+    },
+
+    "MasterDbSubnetGroup" : {
+      "Type" : "AWS::RDS::DBSubnetGroup",
+      "Properties" : {
+        "DBSubnetGroupDescription" : "Subnets available for the RDS DB Instance",
+        "SubnetIds" : { "Fn::FindInMap" : [ "VpcId2Subnets", { "Ref" : "MyVpcId" }, "private" ]}
+      }
+    },
+
+    "MasterDbSecurityGroup" : {
+      "Type" : "AWS::RDS::DBSecurityGroup",
+      "Properties" : {
+        "DBSecurityGroupIngress" : { "EC2SecurityGroupId": { "Ref": "MasterSecurityGroup" } },
+        "GroupDescription": "database access",
+        "EC2VpcId" : { "Ref" : "MyVpcId" }
+      }
+    },
+
+    "MasterDb": {
+      "Type": "AWS::RDS::DBInstance",
+      "Properties": {
+        "DBName": "bamboo",
+        "DBInstanceClass": "db.m1.medium",
+        "AllocatedStorage": "10",
+        "Engine": "mysql",
+        "EngineVersion": "5.5.27",
+        "Port": "3306",
+        "MasterUsername": "bamboo",
+        "MasterUserPassword": { "Ref" : "Password" },
+        "DBParameterGroupName": "utf8",
+        "BackupRetentionPeriod": "1",
+        "PreferredBackupWindow": "14:01-16:01",
+        "PreferredMaintenanceWindow": "sun:16:11-sun:18:11",
+        "MultiAZ": "true",
+        "DBSubnetGroupName" : { "Ref" : "MasterDbSubnetGroup" },
+        "DBSecurityGroups" : [ { "Ref" : "MasterDbSecurityGroup" } ]
+      }
+    }
+  },
+
+  "Outputs" : {
+    "Endpoint" : {
+      "Description" : "The DNS-resolvable hostname for the master instance; you should CNAME to this, as the IP may change",
+      "Value" : {
+        "Fn::Join" : [
+          "", [ "http://", { "Ref" : "HostName" }, ".", { "Ref" : "ZoneName" }, ":8085/" ]
+        ]
+      }
+    },
+    "InstanceId" : {
+      "Description" : "InstanceId of the newly created EC2 instance",
+      "Value" : { "Ref" : "MasterInstance" }
+    },
+    "Instance" : {
+      "Description" : "IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "MasterInstance", "PrivateIp" ] }
+    },
+    "DatabaseId": {
+      "Description": "The endpoint address of the newly created database",
+      "Value": { "Fn::GetAtt": [ "MasterDb", "Endpoint.Address" ] }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+[
+ {
+   "ParameterKey":   "HostName",
+   "ParameterValue": "master.aws-bamboo"
+ },
+ {
+   "ParameterKey":   "SSHKeyName",
+   "ParameterValue": "KeyForAWS"
+ },
+ {
+   "ParameterKey":   "AZ",
+   "ParameterValue": "your-instance-zone"
+ },
+ {
+   "ParameterKey":   "AMI",
+   "ParameterValue": "ami-your-id"
+ },
+ {
+   "ParameterKey":   "Password",
+   "ParameterValue": "your-password"
+ }
+]
