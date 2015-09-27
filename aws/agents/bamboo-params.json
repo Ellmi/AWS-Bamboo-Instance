@@ -1,0 +1,38 @@
+[
+  {
+    "ParameterKey":   "SSHKeyName",
+    "ParameterValue": "KeyForAWS"
+  },
+  {
+    "ParameterKey":   "AMI",
+    "ParameterValue": "ami-your-id"
+  },
+  {
+    "ParameterKey":   "MasterURL",
+    "ParameterValue": "http://your-master-server-dn:8085"
+  },
+  {
+    "ParameterKey":   "OvernightAgents",
+    "ParameterValue": "0"
+  },
+  {
+    "ParameterKey":   "MinAgents",
+    "ParameterValue": "2"
+  },
+  {
+    "ParameterKey":   "MaxAgents",
+    "ParameterValue": "4"
+  },
+  {
+    "ParameterKey": "StartAgentsCronSpec",
+    "ParameterValue": "0 22 * * 0-4"
+  },
+  {
+    "ParameterKey": "StopAgentsCronSpec",
+    "ParameterValue": "0 11 * * *"
+  },
+  {
+    "ParameterKey": "MyVpcId",
+    "ParameterValue": "vpc-b1ab5ed9"
+  }
+]

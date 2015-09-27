@@ -1,0 +1,355 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "AWS Bamboo Agents",
+  "Parameters": {
+    "SSHKeyName": {
+      "Description": "The SSH keyname that you might use to access the agent instances",
+      "Type": "String"
+    },
+    "MyVpcId": {
+      "Description": "The VPC ID that you're deploying into",
+      "Type": "String",
+      "MinLength": "12",
+      "MaxLength": "12",
+      "AllowedPattern": "vpc-[a-f0-9]{8}",
+      "ConstraintDescription": "Must be a valid VPC ID"
+    },
+    "AMI": {
+      "Description": "The desired AMI to use",
+      "Type": "String",
+      "MinLength": "12",
+      "MaxLength": "12",
+      "AllowedPattern": "ami-[a-f0-9]{8}",
+      "ConstraintDescription": "Must be a valid AMI in the destination AWS account"
+    },
+    "MasterURL": {
+      "Description": "The URL of the Bamboo master the agents should connect to (e.g. 'http://master.yourbamboo.com:8085')",
+      "Type": "String"
+    },
+    "OvernightAgents": {
+      "Description": "The number of agents to keep running 24/7",
+      "Type": "Number",
+      "Default": 1
+    },
+    "MinAgents": {
+      "Description": "The minimum number of agents to launch",
+      "Type": "Number",
+      "Default": 1
+    },
+    "MaxAgents": {
+      "Description": "The maximum number of agents to launch",
+      "Type": "Number",
+      "Default": 2
+    },
+    "StartAgentsCronSpec": {
+      "Description": "The cron syntax schedule on which to start agents in their ASG (in UTC). Defaults to 8am local time.",
+      "Type": "String"
+    },
+    "StopAgentsCronSpec": {
+      "Description": "The cron syntax schedule on which to stop agents in their ASG (in UTC). Defaults to 7pm local time.",
+      "Type": "String"
+    }
+  },
+  "Mappings": {
+    "SubnetMap": {
+      "us-west-2a": {"subnet": "subnet-one"},
+      "us-west-2b": {"subnet": "subnet-two"}
+    },
+    "VpcId2AZs": {
+      "vpc-id": {
+        "AZs": [
+          "us-west-2a",
+          "us-west-2b"
+        ]
+      }
+    },
+    "VpcId2Subnets": {
+      "vpc-id": {
+        "private": [
+          "subnet-one",
+          "subnet-two"
+        ]
+      }
+    }
+  },
+  "Resources": {
+    "CfnUser": {
+      "Type": "AWS::IAM::User",
+      "Metadata": {
+        "Comment": [
+          "This user account exists so that credentials",
+          "can be created for it, and passed in for cfn-init",
+          "to use when communicating back out to the CloudFormation API.",
+          "",
+          "When creating or updating a stack that makes use of IAM types,",
+          "you MUST specify CAPABILITY_IAM otherwise the creation/update will",
+          "fail"
+        ]
+      },
+      "Properties": {
+        "Path": "/application/",
+        "Policies": [
+          {
+            "PolicyName": "root",
+            "PolicyDocument": {
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": "cloudformation:DescribeStackResource",
+                  "Resource": "*"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "HostKeys": {
+      "Type": "AWS::IAM::AccessKey",
+      "Properties": {
+        "UserName": {"Ref": "CfnUser"}
+      }
+    },
+    "AgentSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Enable inbound SSH",
+        "VpcId": {"Ref": "MyVpcId"},
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": "22",
+            "ToPort": "22",
+            "CidrIp": "0.0.0.0/0"
+          }
+        ]
+      }
+    },
+    "AgentAutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "UpdatePolicy": {
+        "AutoScalingRollingUpdate": {
+          "MinInstancesInService": "1"
+        }
+      },
+      "Properties": {
+        "AvailabilityZones": {
+          "Fn::FindInMap": [
+            "VpcId2AZs",
+            {"Ref": "MyVpcId"},
+            "AZs"
+          ]
+        },
+        "LaunchConfigurationName": {"Ref": "AgentLaunchConfiguration"},
+        "MinSize": {"Ref": "MinAgents"},
+        "MaxSize": {"Ref": "MaxAgents"},
+        "VPCZoneIdentifier": {
+          "Fn::FindInMap": [
+            "VpcId2Subnets",
+            {"Ref": "MyVpcId"},
+            "private"
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "CloudFormationStack",
+            "Value": {"Ref": "AWS::StackName"},
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "CloudFormationStackId",
+            "Value": {"Ref": "AWS::StackId"},
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "Name",
+            "Value": {"Ref": "AWS::StackName"},
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "lob",
+            "Value": "Commercial",
+            "PropagateAtLaunch": true
+          },
+          {
+            "Key": "application",
+            "Value": "aws-bamboo",
+            "PropagateAtLaunch": true
+          }
+        ]
+      }
+    },
+    "ScheduledActionUp": {
+      "Type": "AWS::AutoScaling::ScheduledAction",
+      "Properties": {
+        "AutoScalingGroupName": {
+          "Ref": "AgentAutoScalingGroup"
+        },
+        "MinSize": {"Ref": "MinAgents"},
+        "MaxSize": {"Ref": "MaxAgents"},
+        "Recurrence": {"Ref": "StartAgentsCronSpec"}
+      }
+    },
+    "ScheduledActionDown": {
+      "Type": "AWS::AutoScaling::ScheduledAction",
+      "Properties": {
+        "AutoScalingGroupName": {
+          "Ref": "AgentAutoScalingGroup"
+        },
+        "MaxSize": {"Ref": "OvernightAgents"},
+        "MinSize": {"Ref": "OvernightAgents"},
+        "Recurrence": {"Ref": "StopAgentsCronSpec"}
+      }
+    },
+    "AgentLaunchConfiguration": {
+      "Metadata": {
+        "AWS::CloudFormation::Init": {
+          "configSets": {
+            "default": [
+              "setupCfnInit",
+              "configureAgent"
+            ]
+          },
+          "setupCfnInit": {
+            "files": {
+              "/etc/cfn/cfn-credentials": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "AWSAccessKeyId=",
+                      {"Ref": "HostKeys"},
+                      "\n",
+                      "AWSSecretKey=",
+                      {
+                        "Fn::GetAtt": [
+                          "HostKeys",
+                          "SecretAccessKey"
+                        ]
+                      },
+                      "\n"
+                    ]
+                  ]
+                },
+                "mode": "000400",
+                "owner": "root",
+                "group": "root"
+              },
+              "/etc/cfn/cfn-hup.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[main]\n",
+                      "stack=",
+                      {"Ref": "AWS::StackName"},
+                      "\n",
+                      "region=",
+                      {"Ref": "AWS::Region"},
+                      "\n",
+                      "interval=1\n",
+                      "credential-file=/etc/cfn/cfn-credentials\n"
+                    ]
+                  ]
+                },
+                "mode": "000400",
+                "owner": "root",
+                "group": "root"
+              },
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "[cfn-auto-reloader-hook]\n",
+                      "triggers=post.update\n",
+                      "path=Resources.AppServerLaunchConfiguration.Metadata.AWS::CloudFormation::Init\n",
+                      "action=/opt/aws/bin/cfn-init -s ",
+                      {"Ref": "AWS::StackName"},
+                      " -r AppServerLaunchConfiguration",
+                      " --credential-file /etc/cfn/cfn-credentials",
+                      " --region ",
+                      {"Ref": "AWS::Region"},
+                      "\n",
+                      "runas=root\n"
+                    ]
+                  ]
+                }
+              }
+            }
+          },
+          "configureAgent": {
+            "commands": {
+              "10-configure": {
+                "command": [
+                  "sed",
+                  "-i",
+                  {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "/^wrapper.app.parameter.2/s%http://master:8085%",
+                        {"Ref": "MasterURL"},
+                        "%"
+                      ]
+                    ]
+                  },
+                  "/opt/atlassian/bamboo/conf/wrapper.conf"
+                ]
+              },
+              "20-restart": {
+                "command": [
+                  "/etc/init.d/bamboo-agent",
+                  "restart"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "ImageId": {"Ref": "AMI"},
+        "InstanceType": "m1.small",
+        "IamInstanceProfile": "bamboo-agent-delivery",
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "yum update -y aws-cfn-bootstrap\n",
+                "# Initial cfn-init run\n",
+                "/opt/aws/bin/cfn-init -s ",
+                {"Ref": "AWS::StackName"},
+                "         -r AgentLaunchConfiguration ",
+                "         --access-key ",
+                {"Ref": "HostKeys"},
+                "         --secret-key ",
+                {
+                  "Fn::GetAtt": [
+                    "HostKeys",
+                    "SecretAccessKey"
+                  ]
+                },
+                "         --region ",
+                {"Ref": "AWS::Region"},
+                " || error_exit 'Failed to run cfn-init'\n",
+                "# Start up the cfn-hup daemon to listen for changes\n",
+                "/opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'\n",
+                "rm -f /etc/localtime; ln -s /usr/share/zoneinfo/Australia/Melbourne /etc/localtime",
+                "\n"
+              ]
+            ]
+          }
+        },
+        "KeyName": {"Ref": "SSHKeyName"},
+        "SecurityGroups": [
+          {"Ref": "AgentSecurityGroup"}
+        ]
+      }
+    }
+  },
+  "Outputs": {
+  }
+}
