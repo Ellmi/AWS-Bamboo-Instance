@@ -167,6 +167,7 @@
               "",
               [
                 "#!/bin/bash\n",
+                "sudo yum update -y aws-cfn-bootstrap\n",
                 "# run cfn-init to actually have the metadata applied\n",
                 "# NOTE this will not apply changes if the metadata is updated\n",
                 "# That will only happen if you configure and enable cfn-hup\n",
@@ -175,7 +176,10 @@
                 " --access-key ", { "Ref": "HostKeys" },
                 " --secret-key ", { "Fn::GetAtt": [ "HostKeys", "SecretAccessKey" ] },
                 " --region ", { "Ref": "AWS::Region" },
-                " || error_exit 'Failed to run cfn-init'\n"
+                " || error_exit 'Failed to run cfn-init'\n",
+
+                "# Start up the cfn-hup daemon to listen for changes\n",
+                "/opt/aws/bin/cfn-hup || error_exit 'Failed to start cfn-hup'\n"
               ]
             ]
           }
@@ -183,14 +187,70 @@
       },
       "Metadata": {
         "AWS::CloudFormation::Init": {
-          "config": {
-            "packages": { "yum": {"rea-bamboo": [] } },
-            "services": {
-              "sysvinit": {
-                "bamboo": {
-                  "enabled": true,
-                  "ensureRunning": true
-                }
+          "configSets": {
+            "default": ["setupCfnInit", "ansible"]
+          },
+          "setupCfnInit" : {
+            "files" : {
+              "/etc/cfn/cfn-credentials": {
+                "content": {
+                  "Fn::Join": [
+                    "",
+                    [
+                      "AWSAccessKeyId=", { "Ref": "HostKeys" }, "\n",
+                      "AWSSecretKey=",
+                      { "Fn::GetAtt": [ "HostKeys", "SecretAccessKey" ] },
+                      "\n"
+                    ]
+                  ]
+                },
+                "mode": "000400",
+                "owner": "root",
+                "group": "root"
+              },
+      
+              "/etc/cfn/cfn-hup.conf": {
+              "content": {
+                "Fn::Join": [
+                 "",
+                 [
+                  "[main]\n",
+                  "stack=", { "Ref": "AWS::StackName" }, "\n",
+                  "region=", { "Ref": "AWS::Region" }, "\n",
+                  "interval=1\n",
+                  "credential-file=/etc/cfn/cfn-credentials\n"
+                 ]
+                ]
+              },
+              "mode": "000400",
+              "owner": "root",
+              "group": "root"
+            },
+  
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf": {
+            "content": {
+              "Fn::Join": [
+                "",
+                [
+                "[cfn-auto-reloader-hook]\n",
+                "triggers=post.update\n",
+                "path=Resources.AppServerLaunchConfiguration.Metadata.AWS::CloudFormation::Init\n",
+                "action=/opt/aws/bin/cfn-init -s ",
+                { "Ref": "AWS::StackName" },
+                " -r AppServerLaunchConfiguration",
+                " --credential-file /etc/cfn/cfn-credentials",
+                " --region ", { "Ref": "AWS::Region" }, "\n",
+                "runas=root\n"
+                ]
+              ]
+            }
+          }
+            }
+          },
+          "ansible": {
+            "commands": {
+              "01-install-ansible": {
+                "command" : [ "sudo", "yum", "-y", "install", "ansible", "--enablerepo=epel"]
               }
             }
           }
