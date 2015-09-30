@@ -48,6 +48,20 @@
     "StopAgentsCronSpec": {
       "Description": "The cron syntax schedule on which to stop agents in their ASG (in UTC). Defaults to 7pm local time.",
       "Type": "String"
+    },
+    "ZoneName": {
+      "Description": "The zone to create the human name in",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "128",
+      "Default": "bamboo.yanminx.com"
+    },
+
+    "HostName": {
+      "Description": "The human-readable endpoint hostname, e.g. 'agent.aws-bamboo'",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "128"
     }
   },
   "Mappings": {
@@ -152,18 +166,17 @@
         },
         "Tags": [
           {
-            "Key": "CloudFormationStack",
-            "Value": {"Ref": "AWS::StackName"},
-            "PropagateAtLaunch": true
-          },
-          {
-            "Key": "CloudFormationStackId",
-            "Value": {"Ref": "AWS::StackId"},
-            "PropagateAtLaunch": true
-          },
-          {
             "Key": "Name",
-            "Value": {"Ref": "AWS::StackName"},
+            "Value": {
+              "Fn::Join": [".", [
+                {
+                    "Ref": "HostName"
+                },
+                {
+                      "Ref": "ZoneName"
+                }
+              ]]
+            },
             "PropagateAtLaunch": true
           },
           {
@@ -263,10 +276,10 @@
                     [
                       "[cfn-auto-reloader-hook]\n",
                       "triggers=post.update\n",
-                      "path=Resources.AppServerLaunchConfiguration.Metadata.AWS::CloudFormation::Init\n",
+                      "path=Resources.AgentLaunchConfiguration.Metadata.AWS::CloudFormation::Init\n",
                       "action=/opt/aws/bin/cfn-init -s ",
                       {"Ref": "AWS::StackName"},
-                      " -r AppServerLaunchConfiguration",
+                      " -r AgentLaunchConfiguration",
                       " --credential-file /etc/cfn/cfn-credentials",
                       " --region ",
                       {"Ref": "AWS::Region"},

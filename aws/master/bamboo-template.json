@@ -153,12 +153,16 @@
         "Monitoring": "false",
         "Tags": [
           {
-            "Key": "node_name",
-            "Value":  { "Ref" : "HostName" }
-          },
-          {
             "Key": "Name",
             "Value": { "Fn::Join": [".", [{ "Ref": "HostName" }, { "Ref": "ZoneName" } ]]}
+          },
+          {
+            "Key": "lob",
+            "Value": "Commercial"
+          },
+          {
+            "Key" : "application",
+            "Value" : "aws-bamboo"
           }
         ],
         "UserData": {
@@ -255,6 +259,52 @@
             }
           }
         }
+      }
+    },
+    "MasterVolume": {
+      "Type": "AWS::EC2::Volume",
+      "Properties": {
+        "Size": "250",
+        "AvailabilityZone": {
+          "Fn::GetAtt": [ "MasterInstance", "AvailabilityZone" ]
+        },
+        "Tags": [
+          {
+            "Key" : "application",
+            "Value" : "aws-bamboo"
+          },
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Join": [".", [
+                {
+                  "Ref": "HostName"
+                },
+                {
+                  "Ref": "ZoneName"
+                }
+              ]]
+            }
+          },
+          {
+            "Key": "lob",
+            "Value": "Commercial"
+          }
+        ]
+      },
+      "DeletionPolicy": "Snapshot"
+    },
+
+    "MountPoint": {
+      "Type": "AWS::EC2::VolumeAttachment",
+      "Properties": {
+        "InstanceId": {
+          "Ref": "MasterInstance"
+        },
+        "VolumeId": {
+          "Ref": "MasterVolume"
+        },
+        "Device": "/dev/sdf"
       }
     },
 

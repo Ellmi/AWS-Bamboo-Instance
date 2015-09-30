@@ -1,5 +1,9 @@
 [
   {
+    "ParameterKey":   "HostName",
+    "ParameterValue": "agent.aws-bamboo"
+  },
+  {
     "ParameterKey":   "SSHKeyName",
     "ParameterValue": "KeyForAWS"
   },
