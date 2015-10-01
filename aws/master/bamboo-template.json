@@ -32,6 +32,13 @@
       "MaxLength": "128"
     },
 
+    "ArtifactName": {
+      "Description": "RCA bamboo artifacts which contains repo mirror and ansible playbook.",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "128"
+    },
+
     "AZ": {
       "Description": "The Availability Zone in which to create the master instance. Either us-west-2a or us-west-2b.",
       "Type": "String",

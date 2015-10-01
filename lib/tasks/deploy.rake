@@ -24,7 +24,8 @@ namespace :agent do
   desc 'create or update bamboo agent stack'
   task :create do
     template = 'file://aws/agent/bamboo-template.json'
-    parameters = 'file://aws/agent/bamboo-params.json'
+    parameters = 'file:///tmp/agent/bamboo-params.json'
+    sh 'bin/upload.sh'
     if NOT_EXIST == status_for(stack_name)
       create(parameters, stack_name, template)
     else

@@ -18,5 +18,9 @@
  {
    "ParameterKey":   "Password",
    "ParameterValue": "your-password"
+ },
+ {
+   "ParameterKey": "ArtifactName",
+   "ParameterValue": "XXX-ArtifactName-XXX"
  }
 ]
