@@ -199,7 +199,7 @@
       "Metadata": {
         "AWS::CloudFormation::Init": {
           "configSets": {
-            "default": ["setupCfnInit", "ansible"]
+            "default": ["setupCfnInit", "downloadFromS3Bucket", "ansible"]
           },
           "setupCfnInit" : {
             "files" : {
@@ -256,6 +256,27 @@
               ]
             }
           }
+            }
+          },
+          "downloadFromS3Bucket":{
+            "commands":{
+                "00-download-files":{
+                    "command":
+                      [ "aws", "s3", "cp"
+                        , { "Fn::Join" :
+                          ["", [
+                            "s3://", { "Ref":"BambooBucketName" }, {"Ref": "ArtifactName"}
+                          ]]
+                          }
+                          , "/var/tmp/artifacts.tar.gz"
+                      ]
+                  , "env": {
+                        "AWS_CONFIG_FILE":"/etc/aws-creds"
+                  }
+                },
+                "01-extract-files":{
+                  "command":[ "tar", "xzf", "/var/tmp/artifacts.tar.gz", "-C", "/var/tmp/" ]
+                }
             }
           },
           "ansible": {
