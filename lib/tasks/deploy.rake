@@ -13,6 +13,11 @@ namespace :bucket do
       puts "Failed create bucket: #{bucket_name}."
     end
   end
+
+    desc 'upload useful artifacts to S3 bucket'
+    task :upload do
+      system("source 'bin/upload.sh'")
+    end
 end
 
 namespace :master do
