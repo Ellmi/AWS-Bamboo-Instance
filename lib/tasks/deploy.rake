@@ -1,4 +1,19 @@
 require 'json'
+require 'aws/s3'
+
+namespace :bucket do
+  desc 'create a s3 bucket'
+  task :create do
+    bucket_name = aws-bamboo-bucket
+    bucket = AWS::S3.new.buckets.create(bucket_name, :acl => :authenticated_read)
+
+    if bucket.exists?
+      puts "Successfully create bucket: #{bucket_name}."
+    else
+      puts "Failed create bucket: #{bucket_name}."
+    end
+  end
+end
 
 namespace :master do
   NOT_EXIST = 'NOT_EXIST'
