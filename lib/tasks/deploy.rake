@@ -75,6 +75,15 @@ def status_for(stack_name)
   JSON.parse(info)['Stacks'].first['StackStatus']
 end
 
+def list_stack_instances(stack_name, region)
+  cf = AWS::CloudFormation.new(:region => region)
+  asg_name = cf.stacks["#{stack_name}"].resources['AgentAutoScalingGroup'].physical_resource_id
+  puts sprintf "%-26s %-11s %-16s %s", 'Launched', 'ID', 'IP address', 'Health'
+  AWS::AutoScaling.new(:region => region).groups[asg_name].auto_scaling_instances.each do |i|
+    puts sprintf "%-26s %-11s %-16s %s", i.ec2_instance.launch_time.localtime, i.id, i.ec2_instance.private_ip_address, i.health_status
+  end
+end
+
 def run(cmd)
   puts cmd
   `#{cmd}`
