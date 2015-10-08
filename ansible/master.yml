@@ -1,5 +1,16 @@
-hosts: localhost
-remote_user: root
-tasks:
-  -name: install bamboo master
-   yum: name=aws-bamboo state=present
+---
+- hosts: localhost
+  connection: local
+  sudo: yes
+  tasks:
+    - name: install bamboo master
+      yum: name=aws-bamboo state=present
+
+    - name: start bamboo server
+      command: service bamboo start
+
+    - name: install git
+      yum: name=git state=present
+
+    - name: install gcc
+      yum: name=gcc state=present
