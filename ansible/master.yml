@@ -14,3 +14,12 @@
 
     - name: install gcc
       yum: name=gcc state=present
+
+    - name: Import EQX SSL certificate
+      command: echo -e "changeit\nyes" | keytool -import -alias EQX_LDAP_CA_Cert -file EQX.asc -keystore $JAVA_HOME/jre/lib/security/cacerts
+
+    - name: Import REA SSL certificate
+      command: echo -e "changeit\nyes" | keytool -import -alias REA_LDAP_CA_Cert -file REA.asc -keystore $JAVA_HOME/jre/lib/security/cacerts
+
+    - name: Import GYR SSL certificate
+      command: echo -e "changeit\nyes" | keytool -import -alias GYR_LDAP_CA_Cert -file GYR.asc -keystore $JAVA_HOME/jre/lib/security/cacerts
